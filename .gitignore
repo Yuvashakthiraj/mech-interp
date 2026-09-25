@@ -1,0 +1,23 @@
+# Python cache and local environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.env
+
+# Jupyter local state
+.ipynb_checkpoints/
+
+# Experiment outputs and model checkpoints
+results/
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+
+# Local editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
