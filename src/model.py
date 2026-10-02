@@ -31,6 +31,7 @@ def build_model(
         n_ctx=seq_len,
         act_fn="relu",
         normalization_type=None,  # LayerNorm-free: makes weight analysis cleaner
+        use_attn_result=True,     # materialises hook_result for per-head ablation/patching
         seed=seed,
         device=device,
     )

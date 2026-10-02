@@ -87,4 +87,11 @@ any check-in or supervisor email.
 - [x] Phase 0 environment set up on Colab
 - [x] Phase 0 grokking reproduced (train acc ~100% by epoch ~200; test acc jumps to ~100% around epoch 2000–4000)
 - [x] Fourier circuit confirmed (4 dominant frequency spikes in embedding DFT; results in `results/fourier_spectrum.png`)
-- [ ] Phase 1 started — add+sub multi-task training, per-task accuracy, head ablation + activation patching
+- [x] Phase 1 complete — add+sub multi-task training, per-task accuracy, head ablation, activation patching
+  - Both tasks grok at **the same epoch (~6200)** → shared learning event
+  - Fourier: top non-DC frequencies {9, 18, 28, 47, 49} — 5 peaks vs ~4 in Phase 0 (slight expansion, not doubled)
+  - Head ablation: all 4 heads show 0% drop for both tasks → attention not individually critical; MLP hypothesis
+  - Activation patching: token embed patch → both tasks drop to 0% (op-specific info in embedding); pos embed → both stay at 100% (fully shared); MLP output → drops to 0% (MLP carries op-specific info)
+  - Preliminary conclusion: add and sub appear to share the majority of their circuit
+  - Results: `results/phase1_*.png`
+- [ ] Phase 2 started — add multiplication (mod 113), re-run sharing analysis; expect reduced sharing
