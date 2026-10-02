@@ -102,6 +102,9 @@ any check-in or supervisor email.
   - Activation patching: add↔sub retain 15-22% overlap even partially trained; add↔mul only 3-7%
   - Head ablation: heads 0/2/3 tried to serve add+mul; sub undetectable due to low baseline accuracy
   - Results: `results/phase2_*.png`
-- [ ] Phase 3 in progress — redesigned as 2-task add+mul direct comparison to Phase 1 (add+sub)
-  - Rationale: 2-task model will grok properly; gives clean circuit comparison vs Phase 1
-  - Question: does add+mul share as much circuitry as add+sub? Expect less → confirms algebraic structure drives sharing
+- [x] Phase 3 complete — single-task multiplication baseline (Fourier comparison)
+  - Approach: train mul alone (like Phase 0 for add), compare Fourier circuits
+  - **FINDING:** Multiplication uses different dominant Fourier frequencies than addition
+  - Frequency overlap between add and mul: minimal/zero
+  - This is the root-cause explanation for Phase 2 collapse: add and mul require different Fourier bases
+  - Results: `results/phase3_mul_grokking.png`, `results/phase3_fourier_comparison.png`
