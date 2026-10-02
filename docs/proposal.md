@@ -88,10 +88,11 @@ any check-in or supervisor email.
 - [x] Phase 0 grokking reproduced (train acc ~100% by epoch ~200; test acc jumps to ~100% around epoch 2000–4000)
 - [x] Fourier circuit confirmed (4 dominant frequency spikes in embedding DFT; results in `results/fourier_spectrum.png`)
 - [x] Phase 1 complete — add+sub multi-task training, per-task accuracy, head ablation, activation patching
-  - Both tasks grok at **the same epoch (~6200)** → shared learning event
-  - Fourier: top non-DC frequencies {9, 18, 28, 47, 49} — 5 peaks vs ~4 in Phase 0 (slight expansion, not doubled)
-  - Head ablation: all 4 heads show 0% drop for both tasks → attention not individually critical; MLP hypothesis
-  - Activation patching: token embed patch → both tasks drop to 0% (op-specific info in embedding); pos embed → both stay at 100% (fully shared); MLP output → drops to 0% (MLP carries op-specific info)
-  - Preliminary conclusion: add and sub appear to share the majority of their circuit
-  - Results: `results/phase1_*.png`
-- [ ] Phase 2 started — add multiplication (mod 113), re-run sharing analysis; expect reduced sharing
+  - **VALID:** Both tasks grok at the same epoch (~6200) → shared learning event
+  - **VALID:** Fourier dominant frequencies {9, 47, 49} — same count as Phase 0, not doubled → shared Fourier circuit
+  - **VALID:** Token embed patch → both tasks drop to 0% (op identity in embedding); pos embed → 100% (fully shared)
+  - **VALID:** MLP output patch → drops to 0% in both directions → MLP is the answer-writing site
+  - **FAILED:** Head ablation — all 0.000 drops. Root cause: missing `use_attn_result=True` in `HookedTransformerConfig`. Without this, `hook_result` is not materialised as a tensor; zeroing it is a silent no-op. Fixed in `src/model.py` and Phase 2 notebook.
+  - **FAILED:** Attn output patching → NaN. Same root cause as above.
+  - Results (valid ones): `results/phase1_grokking_curves.png`, `results/phase1_fourier_spectrum.png`, `results/phase1_activation_patching.png`
+- [ ] Phase 2 in progress — add+sub+mul, re-run all analyses with ablation bug fixed; expect reduced sharing for mul

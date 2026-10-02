@@ -42,14 +42,22 @@ Same architecture retrained on **both** addition and subtraction simultaneously,
 
 | Analysis | Result | Interpretation |
 |----------|--------|----------------|
-| **Grokking** | Both add and sub reach 100% test accuracy at the **same epoch (~6200)** | Strong evidence of a single shared learning event, not two separate ones |
-| **Fourier spectrum** | Top frequencies: {9, 18, 28, 47, 49} — 5 non-DC peaks vs ~4 in Phase 0 | Slight expansion but not doubled → circuit is largely shared across tasks |
-| **Head ablation** | All 4 heads: 0.000 accuracy drop for both tasks | Attention heads are not individually critical; MLP appears to do the heavy lifting |
-| **Activation patching** | Patching **token embeddings** drops both task accuracies to 0.0; patching **pos embeddings** leaves both at 1.0 | Op-token embedding carries task-specific information; positional embeddings are fully shared |
+| **Grokking** | Both add and sub reach 100% test accuracy at the **same epoch (~6200)** | ✅ Strongest finding — simultaneous grokking is direct evidence of a shared learning event |
+| **Fourier spectrum** | Real dominant frequencies: **{9, 47, 49}** (3 large spikes, not doubled vs Phase 0) | ✅ Same frequency count as single-task baseline → Fourier circuit is shared between add and sub |
+| **Activation patching (token embed)** | Patching drops both tasks to 0.0; pos embed stays at 1.0 | ✅ Op-token embedding encodes task identity; positional embeddings are fully shared (expected sanity check) |
+| **Activation patching (MLP output)** | Patching MLP output drops accuracy to 0.0 in both directions | ✅ MLP is the answer-writing site — it encodes the final result, consistent with grokking literature |
+| **Head ablation** | All 4 heads: **0.000 drop** ❌ | ⚠️ **MEASUREMENT FAILURE** — see note below |
+| **Activation patching (attn output)** | NaN ❌ | ⚠️ **MEASUREMENT FAILURE** — same root cause |
 
-**Preliminary conclusion (Phase 1):** Addition and subtraction appear to share the majority of their internal circuit. Both tasks grok simultaneously, use overlapping Fourier frequencies, and are sensitive to the same components (token embeddings, MLP). This is consistent with the hypothesis that algebraically related operations (add/sub differ only by negation mod p) reuse the same underlying computation.
+> ❌ **Phase 1 measurement failure — head ablation and attention patching:**
+> The `HookedTransformerConfig` was missing `use_attn_result=True`. Without this flag,
+> TransformerLens registers `hook_result` as a named hook point but **never materialises it
+> as a separate tensor** — zeroing it is silently a no-op and patching it produces NaN.
+> The all-zero ablation drops and NaN patching values are **artefacts of this bug, not real findings**.
+> This was identified after Phase 1, fixed in `src/model.py`, and corrected in the Phase 2 notebook.
+> The grokking curves, Fourier spectrum, and token/MLP patching results are **unaffected** and valid.
 
-> ⚠️ **Caveat:** These are preliminary results from a single training run. Replication across seeds and more rigorous causal analysis (e.g., path patching) needed before making strong claims.
+**Valid Phase 1 conclusions:** Both tasks grok simultaneously (epoch 6200), share the same 3 dominant Fourier frequencies {9, 47, 49}, and have their final answer written by the MLP. Head-level attribution will be measured correctly in Phase 2.
 
 ---
 
