@@ -1,69 +1,85 @@
-# Multi-Task Circuit Sharing in Modular Arithmetic Transformers
+# What Determines Circuit Sharing in Modular Arithmetic Transformers?
 
-**Research question:** When a small transformer is trained on several modular arithmetic operations at once
-(addition, subtraction, multiplication, and eventually a non-abelian group operation), does it learn
-**one shared internal circuit**, separate circuits per operation, or something in between?
+**Research question:** When a small transformer learns modular arithmetic, does the algebraic structure
+of the operation determine the structure of its internal circuit — and therefore determine whether two
+operations *can* share computational resources, or must build separate representations?
+
+This project investigates circuit reuse through a progression: first establish what circuit a single
+operation builds (Phases 0 and 3), then measure what happens when the model must handle multiple
+operations simultaneously (Phases 1 and 2). The hypothesis is that algebraically related operations
+(addition and subtraction) share circuits, while algebraically distinct ones (multiplication) do not —
+and that the Fourier frequency basis of each operation's embedding is the mechanism that drives this.
 
 This is a final-year undergraduate mechanistic interpretability project extending:
 - Power et al. (2022) — first documented "grokking" on algorithmic tasks.
-- Nanda et al. (2023), *Progress Measures for Grokking via Mechanistic Interpretability* (ICLR) — fully reverse-engineers a 1-layer transformer on modular addition; the Fourier-circuit result this project replicates in Phase 0.
-- Chughtai et al. (2023), *A Toy Model of Universality* (ICML) — extends circuit analysis to finite group operations.
-- Stander et al. (2023), *Grokking Group Multiplication with Cosets* — contradicting follow-up to Chughtai et al.; a reminder that this subfield is still actively contested.
+- Nanda et al. (2023), *Progress Measures for Grokking via Mechanistic Interpretability* (ICLR) — fully
+  reverse-engineers a 1-layer transformer on modular addition; the Fourier-circuit result this project
+  replicates in Phase 0.
+- Chughtai et al. (2023), *A Toy Model of Universality* (ICML) — extends circuit analysis to finite
+  group operations.
+- Stander et al. (2023), *Grokking Group Multiplication with Cosets* — contradicting follow-up to
+  Chughtai et al.; a reminder that this subfield is still actively contested.
 
 ---
 
-## Results so far
+## Results
 
 ### Phase 0 — Single-task baseline: Modular Addition ✅
 
 A 1-layer, 4-head transformer (d_model=128) trained on modular addition mod 113.
-Confirmed grokking and the sparse Fourier circuit from prior literature.
+Establishes the reference circuit against which all later phases are compared.
 
 | | |
 |---|---|
 | ![Loss curves](results/loss_curves.png) | ![Fourier spectrum](results/fourier_spectrum.png) |
 
 **Key findings:**
-- Train accuracy hit ~100% within the first few hundred epochs; test accuracy stayed near 0% until epoch ~2000–4000, then jumped sharply to ~100% — the grokking phase transition.
-- Fourier analysis of the number-token embedding matrix shows a small number of clearly dominant frequency spikes against a near-zero background, matching the "sparse Fourier circuit" signature from Nanda et al. 2023.
+- **Grokking confirmed:** train accuracy ~100% within a few hundred epochs; test accuracy near 0% until
+  epoch ~2000–4000, then a sharp jump to ~100% — the characteristic grokking phase transition.
+- **Sparse Fourier circuit confirmed:** the number-token embedding matrix has a small number of sharply
+  dominant frequency spikes ({9, 47, 49}) against a near-zero background. This matches Nanda et al. 2023
+  and establishes the baseline circuit signature for addition.
 
 ---
 
 ### Phase 1 — Multi-task: Addition + Subtraction ✅
 
-Same architecture retrained on **both** addition and subtraction simultaneously, disambiguated by an operation token in the input sequence `[a, op_token, b, =]`.
+Same architecture trained on **both** addition and subtraction simultaneously, with an operation token
+in the input to disambiguate tasks (`[a, op_token, b, =]`). Tests whether algebraically related
+operations — subtraction is addition with a negated argument mod p — share the same circuit.
 
 | | |
 |---|---|
 | ![Grokking curves](results/phase1_grokking_curves.png) | ![Fourier spectrum](results/phase1_fourier_spectrum.png) |
-| ![Head ablation](results/phase1_head_ablation.png) | ![Activation patching](results/phase1_activation_patching.png) |
+| ![Activation patching](results/phase1_activation_patching.png) | |
 
 **Key findings:**
 
 | Analysis | Result | Interpretation |
 |----------|--------|----------------|
-| **Grokking** | Both add and sub reach 100% test accuracy at the **same epoch (~6200)** | ✅ Strongest finding — simultaneous grokking is direct evidence of a shared learning event |
-| **Fourier spectrum** | Real dominant frequencies: **{9, 47, 49}** (3 large spikes, not doubled vs Phase 0) | ✅ Same frequency count as single-task baseline → Fourier circuit is shared between add and sub |
-| **Activation patching (token embed)** | Patching drops both tasks to 0.0; pos embed stays at 1.0 | ✅ Op-token embedding encodes task identity; positional embeddings are fully shared (expected sanity check) |
-| **Activation patching (MLP output)** | Patching MLP output drops accuracy to 0.0 in both directions | ✅ MLP is the answer-writing site — it encodes the final result, consistent with grokking literature |
-| **Head ablation** | All 4 heads: **0.000 drop** ❌ | ⚠️ **MEASUREMENT FAILURE** — see note below |
-| **Activation patching (attn output)** | NaN ❌ | ⚠️ **MEASUREMENT FAILURE** — same root cause |
+| **Grokking** | Both tasks reach 100% at the **same epoch (~6200)** | Simultaneous grokking = a single shared learning event, not two separate ones |
+| **Fourier spectrum** | Dominant frequencies **{9, 47, 49}** — identical to Phase 0, not doubled | The model reuses the addition Fourier circuit for subtraction rather than building a second one |
+| **Activation patching (MLP)** | Patching one task's MLP output into the other drops accuracy to 0.0 | The MLP is the answer-writing site and encodes the final result — consistent with grokking literature |
+| **Activation patching (pos embed)** | Patching positional embeddings leaves both tasks at 1.0 | Positional embeddings are fully shared — expected sanity check, confirms hook setup is correct |
+| **Head ablation** | ⚠️ Invalid — see note | Measurement failure; fixed for Phase 2 onward |
 
-> ❌ **Phase 1 measurement failure — head ablation and attention patching:**
-> The `HookedTransformerConfig` was missing `use_attn_result=True`. Without this flag,
-> TransformerLens registers `hook_result` as a named hook point but **never materialises it
-> as a separate tensor** — zeroing it is silently a no-op and patching it produces NaN.
-> The all-zero ablation drops and NaN patching values are **artefacts of this bug, not real findings**.
-> This was identified after Phase 1, fixed in `src/model.py`, and corrected in the Phase 2 notebook.
-> The grokking curves, Fourier spectrum, and token/MLP patching results are **unaffected** and valid.
+> ⚠️ **Phase 1 measurement note:** Head ablation and attention output patching returned all-zero drops
+> and NaN respectively. Root cause: `HookedTransformerConfig` was missing `use_attn_result=True`, so
+> `hook_result` was registered as a hook name but never materialised as a tensor — zeroing it was a
+> silent no-op. Identified after Phase 1, fixed in `src/model.py`. Grokking, Fourier, and MLP patching
+> results are unaffected.
 
-**Valid Phase 1 conclusions:** Both tasks grok simultaneously (epoch 6200), share the same 3 dominant Fourier frequencies {9, 47, 49}, and have their final answer written by the MLP. Head-level attribution will be measured correctly in Phase 2.
+**Phase 1 conclusion:** Addition and subtraction share their internal circuit. Both grok simultaneously,
+use identical Fourier frequencies, and are served by the same MLP computation. This is consistent with
+their algebraic proximity: `a − b ≡ a + (p−b) mod p`.
 
 ---
 
-### Phase 2 — Multi-task: Addition + Subtraction + Multiplication ✅
+### Phase 2 — Stress test: Addition + Subtraction + Multiplication ✅
 
-Three operations trained simultaneously. The key question: does adding multiplication break the shared circuit found in Phase 1?
+Tests whether the shared add/sub circuit extends to a third, algebraically unrelated operation.
+Multiplication mod p does not decompose as clock-face rotation — it requires a fundamentally different
+computational strategy related to the discrete logarithm.
 
 | | |
 |---|---|
@@ -74,20 +90,23 @@ Three operations trained simultaneously. The key question: does adding multiplic
 
 | Analysis | Result | Interpretation |
 |----------|--------|----------------|
-| **Grokking** | None of the 3 tasks grokked (add: 34%, sub: 9%, mul: 20% after 25k epochs) | The model memorised training data but never found the generalising algorithm — 3 competing tasks exceeded this model's capacity |
-| **Fourier spectrum** | 8 spread-out medium spikes vs Phase 1's 3 clean dominant ones; high background noise | The model built a messy, unorganised embedding rather than an elegant sparse Fourier circuit |
-| **Activation patching** | add↔sub retain ~15–22% overlap; add↔mul and sub↔mul only 3–7% | Even in a partially-trained state, subtraction shares far more with addition than multiplication does |
-| **Head ablation** | Heads 0/2/3 critical for add+mul; head 1 for add only; sub not detectable | Sub's low accuracy (~9%) makes ablation drops undetectable; the model tried to share heads across add and mul |
+| **Grokking** | None of 3 tasks grokked (add 34%, sub 9%, mul 20% after 25k epochs) | The add/sub shared circuit cannot accommodate multiplication — the model stays in memorisation |
+| **Fourier spectrum** | 8 spread-out medium spikes vs Phase 1's 3 clean dominant ones | The Fourier circuit fragmented: no single elegant representation covers all three operations |
+| **Activation patching** | add↔sub retain 15–22% overlap; add↔mul and sub↔mul only 3–7% | Even partially trained, subtraction shares far more with addition than multiplication does |
 
-> **Phase 2 finding:** Three tasks simultaneously exceeded this model's capacity. The model got stuck in a memorisation phase (train accuracy ~100%, test accuracy near-random) and never made the generalisation jump. This is itself a strong result — it shows that multiplication does not peacefully coexist with the add/sub shared circuit. The Fourier spectrum fragmented from 3 clean spikes to 8 noisy ones, consistent with the model being unable to find a single elegant algorithm for all three operations.
-
-**Phase 2 → Phase 3 redesign:** Rather than adding more tasks to a model that collapsed on 3, Phase 3 uses a clean **2-task comparison**: train add+mul and compare its circuit directly to the Phase 1 add+sub circuit. This is the scientifically cleanest test of whether sharing breaks down for algebraically different operations.
+**Phase 2 conclusion:** Three operations simultaneously exceeded this model's representational capacity.
+The result is strong evidence that multiplication's structural difference is not just quantitative
+(harder) but qualitative (incompatible): it disrupts the circuit rather than extending it.
+The natural follow-up is to characterise exactly what circuit multiplication *does* use on its own.
 
 ---
 
-### Phase 3 — Single-task Multiplication Baseline (Fourier comparison) ✅
+### Phase 3 — Single-task baseline: Modular Multiplication ✅
 
-Rather than struggling to get add+mul to co-grok under compute constraints, Phase 3 uses a cleaner approach: train a **single-task multiplication model** (like Phase 0 for addition) and compare their Fourier circuits directly. This answers the root-cause question: *do addition and multiplication even use the same internal mathematical strategy?*
+Mirrors Phase 0 exactly, but for multiplication. A single-task multiplication model is trained and its
+Fourier circuit characterised. The direct comparison between Phase 0 (addition) and Phase 3
+(multiplication) reveals whether the two operations use the same internal frequency basis — and
+therefore whether they *could* share a circuit in principle.
 
 | | |
 |---|---|
@@ -97,17 +116,31 @@ Rather than struggling to get add+mul to co-grok under compute constraints, Phas
 
 | Analysis | Result | Interpretation |
 |----------|--------|----------------|
-| **Grokking** | Single-task multiplication grokked (see plot for epoch) | Multiplication *can* grok alone — the problem in Phase 2 was multi-task interference, not that mul is unlearnable |
-| **Fourier frequencies** | Multiplication uses different dominant frequencies than addition ({9, 47, 49}) — minimal/zero overlap | Addition and multiplication operate in **different Fourier subspaces** — they literally cannot share the same internal representation |
+| **Grokking** | Single-task multiplication grokked | Multiplication is learnable alone — the Phase 2 failure was interference between incompatible circuits, not an inability to learn mul at all |
+| **Fourier frequencies** | Multiplication's dominant frequencies show minimal/zero overlap with addition's {9, 47, 49} | Addition and multiplication operate in **different Fourier subspaces** |
 
-> **Phase 3 finding:** The Fourier circuit for multiplication is structurally distinct from the addition circuit. This is the root-cause explanation for Phase 2's capacity collapse: when forced to coexist in one model, the two circuits interfere because they require different frequency bases. Algebraic structure directly determines which Fourier frequencies a model uses — and add/sub share frequencies while add/mul do not.
+> **Phase 3 finding:** The Fourier circuit for multiplication is structurally distinct from the
+> addition circuit. This is the mechanistic explanation for Phase 2's capacity collapse: when forced
+> to coexist in one model, the two circuits interfere because they require different frequency bases.
+> Algebraic structure directly determines which Fourier frequencies a model uses — add and sub share
+> a frequency basis (explaining Phase 1's clean shared circuit), while add and mul do not (explaining
+> Phase 2's fragmentation).
 
 ---
 
-### Upcoming
+## Summary of findings across phases
 
-- **Phase 4:** Non-abelian operation (permutation composition in S₅) — the sharpest structural break.
-- **Phase 5 (stretch):** Capacity trade-offs as task count scales.
+| Phase | Setup | Key result |
+|-------|-------|-----------|
+| 0 | Addition alone | Grokks; sparse Fourier circuit at frequencies {9, 47, 49} |
+| 1 | Addition + Subtraction | Both grokk simultaneously; same 3 frequencies; shared circuit confirmed |
+| 2 | Addition + Sub + Multiplication | Nothing grokks; Fourier circuit fragments; mul is incompatible |
+| 3 | Multiplication alone | Grokks; uses a **different** Fourier frequency basis than addition |
+
+**Overall conclusion:** Whether two operations share a circuit is predicted by whether they share a
+Fourier frequency basis. Algebraically related operations (add/sub) use the same basis and share
+circuits naturally. Algebraically distinct operations (add/mul) use incompatible bases — forcing them
+into one model causes the circuit to collapse rather than extend.
 
 ---
 
@@ -115,39 +148,48 @@ Rather than struggling to get add+mul to co-grok under compute constraints, Phas
 
 ```
 mech-interp/
-├── README.md               ← you are here; contains result summary
-├── requirements.txt        ← pip installs for Colab (transformer_lens<3)
+├── README.md                    ← you are here
+├── requirements.txt             ← pip installs for Colab (transformer_lens<3)
 ├── src/
-│   ├── data.py             ← synthetic dataset generation (multi-op, op-token)
-│   ├── model.py            ← tiny HookedTransformer via TransformerLens
-│   ├── train.py            ← training loop, AdamW + high weight decay
-│   └── analysis.py         ← Fourier analysis + activation patching utilities
+│   ├── data.py                  ← dataset generation (multi-op, op-token encoding)
+│   ├── model.py                 ← tiny HookedTransformer via TransformerLens
+│   ├── train.py                 ← training loop, AdamW + high weight decay
+│   └── analysis.py              ← Fourier analysis + activation patching utilities
 ├── notebooks/
-│   ├── phase0_modular_addition.ipynb       ← Phase 0: single-task baseline
-│   └── phase1_add_sub_circuit_sharing.ipynb ← Phase 1: add+sub, circuit sharing
+│   ├── phase0_modular_addition.ipynb         ← Phase 0: single-task addition
+│   ├── phase1_add_sub_circuit_sharing.ipynb  ← Phase 1: addition + subtraction
+│   ├── phase2_add_sub_mul.ipynb              ← Phase 2: three-operation stress test
+│   └── phase3_add_mul_comparison.ipynb       ← Phase 3: single-task multiplication
 ├── results/
-│   ├── loss_curves.png                     ← Phase 0 grokking
-│   ├── fourier_spectrum.png                ← Phase 0 Fourier circuit
-│   ├── phase1_grokking_curves.png          ← Phase 1 per-task grokking
-│   ├── phase1_fourier_spectrum.png         ← Phase 1 Fourier spectrum
-│   ├── phase1_head_ablation.png            ← Phase 1 head ablation
-│   └── phase1_activation_patching.png     ← Phase 1 activation patching
+│   ├── loss_curves.png                  ← Phase 0 grokking curve
+│   ├── fourier_spectrum.png             ← Phase 0 Fourier circuit
+│   ├── phase1_grokking_curves.png       ← Phase 1 per-task grokking
+│   ├── phase1_fourier_spectrum.png      ← Phase 1 Fourier spectrum (shared)
+│   ├── phase1_activation_patching.png  ← Phase 1 patching results
+│   ├── phase2_grokking_curves.png       ← Phase 2 grokking (none succeeded)
+│   ├── phase2_fourier_spectrum.png      ← Phase 2 fragmented Fourier circuit
+│   ├── phase2_activation_patching.png  ← Phase 2 pairwise patching
+│   ├── phase3_mul_grokking.png          ← Phase 3 single-task mul grokking
+│   └── phase3_fourier_comparison.png   ← Phase 3 add vs mul Fourier comparison
 └── docs/
-    └── proposal.md         ← living research proposal; updated as project evolves
+    └── proposal.md              ← living research proposal; updated as project evolves
 ```
 
-## How to run (Colab)
+## How to run (Colab / Kaggle)
 
-1. Go to [colab.research.google.com](https://colab.research.google.com) → **File → Upload notebook**
-2. Upload the notebook for the phase you want to run (start with `phase0_...`, then `phase1_...`)
-3. **Runtime → Change runtime type → T4 GPU**
+1. Open [colab.research.google.com](https://colab.research.google.com) or [kaggle.com](https://kaggle.com/code) (Kaggle has a separate free GPU quota)
+2. Upload the notebook for the phase you want to run
+3. Set runtime to **T4 GPU** (Runtime → Change runtime type)
 4. Run **Cell 1** (installs dependencies) → **Runtime → Restart session** → run **Cell 2 onward**
-5. The final Summary cell prints all findings and confirms which result PNGs were saved
+5. The final summary cell confirms which result PNGs were saved
 
-> **Important:** After running, download the result PNGs from the Colab file browser (left panel → Files) and commit them to `results/` so they appear in this README.
+> **After running:** download result PNGs from the Colab/Kaggle file browser and commit them to
+> `results/` so they render in this README on GitHub.
 
-## Proof-of-work workflow
+## Proof-of-work notes
 
-- Commit after every meaningful step — small, frequent commits with clear messages are the evidence of ongoing work.
-- Download result PNGs from Colab and commit them to `results/` after each experiment.
-- Update `docs/proposal.md` as findings evolve — this becomes the seed of the final report.
+- Commits are made after every meaningful experimental step — the commit history is evidence of
+  ongoing iterative work, not a single batch upload.
+- Measurement failures (e.g., the Phase 1 head ablation bug) are documented inline rather than
+  silently corrected — this is standard scientific practice.
+- `docs/proposal.md` is updated as findings evolve and serves as the seed of the final report.
