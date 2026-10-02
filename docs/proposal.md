@@ -95,4 +95,13 @@ any check-in or supervisor email.
   - **FAILED:** Head ablation — all 0.000 drops. Root cause: missing `use_attn_result=True` in `HookedTransformerConfig`. Without this, `hook_result` is not materialised as a tensor; zeroing it is a silent no-op. Fixed in `src/model.py` and Phase 2 notebook.
   - **FAILED:** Attn output patching → NaN. Same root cause as above.
   - Results (valid ones): `results/phase1_grokking_curves.png`, `results/phase1_fourier_spectrum.png`, `results/phase1_activation_patching.png`
-- [ ] Phase 2 in progress — add+sub+mul, re-run all analyses with ablation bug fixed; expect reduced sharing for mul
+- [x] Phase 2 complete (add+sub+mul, 3-task) — key finding: capacity collapse
+  - **FINDING:** None of the 3 tasks grokked (add 34%, sub 9%, mul 20% after 25k epochs, WD=0.5)
+  - Model memorised training data but never generalised — 3 tasks exceeded model capacity
+  - Fourier: spectrum fragmented from 3 clean spikes to 8 noisy spread-out spikes (no elegant circuit formed)
+  - Activation patching: add↔sub retain 15-22% overlap even partially trained; add↔mul only 3-7%
+  - Head ablation: heads 0/2/3 tried to serve add+mul; sub undetectable due to low baseline accuracy
+  - Results: `results/phase2_*.png`
+- [ ] Phase 3 in progress — redesigned as 2-task add+mul direct comparison to Phase 1 (add+sub)
+  - Rationale: 2-task model will grok properly; gives clean circuit comparison vs Phase 1
+  - Question: does add+mul share as much circuitry as add+sub? Expect less → confirms algebraic structure drives sharing

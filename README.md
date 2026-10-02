@@ -61,16 +61,45 @@ Same architecture retrained on **both** addition and subtraction simultaneously,
 
 ---
 
-### Phase 2 — Multi-task: Addition + Subtraction + Multiplication 🔄 *In progress*
+### Phase 2 — Multi-task: Addition + Subtraction + Multiplication ✅
 
-Multiplication mod p is algebraically unrelated to add/sub — it does not decompose as simple clock-face rotation. The question is whether adding it breaks the shared circuit or forces the model to learn a second, separate one.
+Three operations trained simultaneously. The key question: does adding multiplication break the shared circuit found in Phase 1?
+
+| | |
+|---|---|
+| ![Grokking curves](results/phase2_grokking_curves.png) | ![Fourier spectrum](results/phase2_fourier_spectrum.png) |
+| ![Activation patching](results/phase2_activation_patching.png) | |
+
+**Key findings:**
+
+| Analysis | Result | Interpretation |
+|----------|--------|----------------|
+| **Grokking** | None of the 3 tasks grokked (add: 34%, sub: 9%, mul: 20% after 25k epochs) | The model memorised training data but never found the generalising algorithm — 3 competing tasks exceeded this model's capacity |
+| **Fourier spectrum** | 8 spread-out medium spikes vs Phase 1's 3 clean dominant ones; high background noise | The model built a messy, unorganised embedding rather than an elegant sparse Fourier circuit |
+| **Activation patching** | add↔sub retain ~15–22% overlap; add↔mul and sub↔mul only 3–7% | Even in a partially-trained state, subtraction shares far more with addition than multiplication does |
+| **Head ablation** | Heads 0/2/3 critical for add+mul; head 1 for add only; sub not detectable | Sub's low accuracy (~9%) makes ablation drops undetectable; the model tried to share heads across add and mul |
+
+> **Phase 2 finding:** Three tasks simultaneously exceeded this model's capacity. The model got stuck in a memorisation phase (train accuracy ~100%, test accuracy near-random) and never made the generalisation jump. This is itself a strong result — it shows that multiplication does not peacefully coexist with the add/sub shared circuit. The Fourier spectrum fragmented from 3 clean spikes to 8 noisy ones, consistent with the model being unable to find a single elegant algorithm for all three operations.
+
+**Phase 2 → Phase 3 redesign:** Rather than adding more tasks to a model that collapsed on 3, Phase 3 uses a clean **2-task comparison**: train add+mul and compare its circuit directly to the Phase 1 add+sub circuit. This is the scientifically cleanest test of whether sharing breaks down for algebraically different operations.
+
+---
+
+### Phase 3 — Two-task comparison: Addition vs Multiplication 🔄 *In progress*
+
+A direct 2-task match: train one model on **add+mul** and compare its degree of circuit sharing to Phase 1's **add+sub** model.
+
+- **Phase 1 (add+sub):** Grokked simultaneously at epoch 6200; 3 shared Fourier frequencies; ~15-22% patching overlap → *high sharing*
+- **Phase 3 (add+mul):** Expected to grok at different epochs; different Fourier frequencies; lower patching overlap → *reduced sharing*
+
+This directly quantifies how much the algebraic distance between operations affects circuit reuse.
 
 ---
 
 ### Upcoming
 
-- **Phase 3:** Add a non-abelian operation (permutation composition in S₅ or S₆) — the sharpest structural break.
-- **Phase 4 (stretch):** Scale to more operations; study capacity trade-offs.
+- **Phase 4:** Add a non-abelian operation (permutation composition in S₅ or S₆) — the sharpest structural break.
+- **Phase 5 (stretch):** Study capacity trade-offs as task count scales.
 
 ---
 
