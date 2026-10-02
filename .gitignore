@@ -9,15 +9,17 @@ env/
 # Jupyter local state
 .ipynb_checkpoints/
 
-# Experiment outputs and model checkpoints
-results/
+# Large model checkpoint files (keep plots, exclude binary weights)
 checkpoints/
 *.pt
 *.pth
 *.ckpt
+*.zip
 
 # Local editor and operating-system files
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+
+# NOTE: results/ is intentionally NOT ignored — plots are committed as proof-of-work.

@@ -84,7 +84,7 @@ Keep a running list here of what's been done, linking to commits/results —
 this section is your fastest way to answer "what have you done so far" in
 any check-in or supervisor email.
 
-- [ ] Phase 0 environment set up on Colab
-- [ ] Phase 0 grokking reproduced
-- [ ] Fourier circuit confirmed
-- [ ] Phase 1 started
+- [x] Phase 0 environment set up on Colab
+- [x] Phase 0 grokking reproduced (train acc ~100% by epoch ~200; test acc jumps to ~100% around epoch 2000–4000)
+- [x] Fourier circuit confirmed (4 dominant frequency spikes in embedding DFT; results in `results/fourier_spectrum.png`)
+- [ ] Phase 1 started — add+sub multi-task training, per-task accuracy, head ablation + activation patching
